@@ -316,6 +316,20 @@ async def settle_viewer_close(authority, session_id):
     from gateway.session_vault_prompt import release_unlocks
     release_unlocks(session_id)
     await _run_close_lifecycle(authority, live, target, platform, close.reason)
+    _retire_closed(authority, session_id, live)
+
+
+def _retire_closed(authority, session_id, live):
+    """A closed local conversation nobody views and nothing runs in leaves memory, as a restart
+    leaves it: listings read its stored row and the next attach, admission or result restores it
+    from its receipt (``restore_local_session``, with the source object it was admitted with). Its
+    route's source and frozen policy stay registered on the local adapter."""
+    from gateway.config import Platform
+    if (authority.sessions.get(session_id) is live and not live.subscribers and not live.rescan
+            and session_id not in authority.pending_closes and live.source is not None
+            and live.source.platform == Platform.LOCAL and not live.detached
+            and session_id not in authority.executing):
+        del authority.sessions[session_id]
 
 
 async def _resolve_abandoned_unknown(authority, session_id, live, close):

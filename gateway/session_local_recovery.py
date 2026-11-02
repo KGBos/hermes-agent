@@ -194,6 +194,7 @@ def restore_local_session(authority, sid):
             entry.origin = source
             store._entries[route] = entry
         adapter.policies[chat_id] = policy
+        source = entry.origin = adapter.kept_source(source)
         authority.sessions[sid] = LiveSession(source, route)
         adapter.register_source(source)
     elif (not adapter.authorize_source(live.source)

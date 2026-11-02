@@ -70,6 +70,30 @@ async def test_local_turn_runs_its_post_delivery_callbacks_after_settling(tmp_pa
 
 
 @pytest.mark.asyncio
+async def test_closed_local_session_leaves_memory_and_comes_back_with_its_source(tmp_path, monkeypatch):
+    """The last viewer's close retires an idle local conversation from the authority, as a restart
+    would; the next attach restores it with the very source object its background work holds."""
+    from gateway.session_local import create_local_session
+
+    runner, authority, db = await _owner(tmp_path, monkeypatch)
+    try:
+        ref = create_local_session(authority, _viewer(), dict(request_id="r", source="tui", model="fixture",
+                                                              toolsets=[]))
+        source = authority.sessions[ref.session_id].source
+        subscription = (await authority.attach(_viewer(), ref)).subscription_id
+        await authority.detach(_viewer(), subscription, end_reason="tui_shutdown")
+        await async_wait_until(lambda: ref.session_id not in authority.sessions, timeout=10,
+                               what="the closed session to leave memory")
+        assert db.get_session(ref.session_id)["end_reason"] == "tui_shutdown"
+        await authority.attach(_viewer(), ref)
+        live = authority.sessions[ref.session_id]
+        assert live.source is source
+        assert runner._delivery_adapter_for(source).authorize_source(source)
+    finally:
+        db.close()
+
+
+@pytest.mark.asyncio
 async def test_deleted_local_session_leaves_nothing_on_the_local_adapter(tmp_path, monkeypatch):
     from gateway.session_local import create_local_session
     from gateway.session_mutations import mutate_session
