@@ -776,10 +776,14 @@ def _resolve_worktree_workspace(task: Task, *, board: Optional[str] = None) -> t
 
     repo_root = _repo_root_for_worktree_target(requested.parent)
     if repo_root is None:
-        raise ValueError(
-            f"task {task.id} worktree path {task.workspace_path!r} is not inside a git repo "
-            "and does not point at a git repo root"
-        )
+        board_slug = board if board else _kb.get_current_board()
+        board_default = (_kb.read_board_metadata(board_slug).get("default_workdir") or "").strip()
+        if board_default and _git_toplevel(Path(board_default).expanduser()) is not None:
+            anchor_repo = _git_toplevel(Path(board_default).expanduser())
+            return _anchored_worktree(anchor_repo, task.id, branch_name)
+        p = _kb.workspaces_root(board=board) / task.id
+        p.mkdir(parents=True, exist_ok=True)
+        return p.resolve(strict=False), branch_name
     _ensure_git_worktree(repo_root, requested, branch_name)
     return requested, branch_name
 
