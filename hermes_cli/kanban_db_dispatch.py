@@ -2383,6 +2383,17 @@ def _dispatch_once_locked(
     if not may_spawn:
         return result
 
+    try:
+        from hermes_cli.update_lock import update_in_progress
+        from hermes_cli.venv_sync import completion_pending_path
+        from hermes_constants import PROJECT_ROOT
+        if update_in_progress(PROJECT_ROOT) or completion_pending_path(PROJECT_ROOT).is_file():
+            import logging
+            logging.getLogger(__name__).info("kanban dispatcher: update or dependency installation in progress; deferring worker spawns")
+            return result
+    except Exception:
+        pass
+
     ready_rows = _lane_rows(conn, "ready")
     # Review rows are enumerated up front so the budget split can see whether
     # review work exists at all.
