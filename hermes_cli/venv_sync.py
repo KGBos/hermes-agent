@@ -176,6 +176,30 @@ def completion_pending_path(project_root: Path) -> Path:
     return install_state_dir(project_root) / "source-completion-pending"
 
 
+def spawns_deferred_by_update(project_root: Path | None = None) -> bool:
+    """Whether code started now could import a half-synced tree: an update owns
+    the checkout, or a source update's dependency-sync tail has not finished.
+
+    The kanban dispatcher defers worker spawns while this holds. A probe that
+    cannot read its markers is logged and reads as "no update", so a broken
+    marker never wedges the board.
+    """
+    import logging
+
+    from hermes_cli._startup_fast import project_root_str
+    from hermes_cli.update_lock import update_in_progress
+
+    root = project_root or Path(project_root_str())
+    try:
+        deferred = update_in_progress(root) or completion_pending_path(root).is_file()
+    except OSError:
+        logging.getLogger(__name__).warning("update probe failed for %s", root, exc_info=True)
+        return False
+    if deferred:
+        logging.getLogger(__name__).info("update or dependency sync in progress; deferring worker spawns")
+    return deferred
+
+
 def arm_completion(project_root: Path) -> Path:
     """Persist the tail obligation before selecting a new dependency generation."""
     pending = completion_pending_path(project_root)
