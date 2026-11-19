@@ -2349,12 +2349,12 @@ def _dispatch_once_locked(
     may_spawn, spawn_budget = _tick_spawn_budget(
         conn, result, max_spawn=max_spawn, max_in_progress=max_in_progress, board=board,
     )
-    if not may_spawn:
+    from hermes_cli.venv_sync import spawns_deferred_by_update
+    if not may_spawn or (not dry_run and spawns_deferred_by_update()):
         return result
 
     ready_rows = _lane_rows(conn, "ready")
-    # Review rows are enumerated up front so the budget split can see whether
-    # review work exists at all.
+    # Review rows are enumerated up front so the budget split sees whether review work exists.
     review_rows = _lane_rows(conn, "review") if review_dispatch_enabled() else []
     # Per-profile cap. Deferred tasks go to skipped_per_profile_capped, not
     # skipped_unassigned — "busy, retry later" differs from "needs routing".
